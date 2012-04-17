@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Unzip and Drop file in JavaScript</title>
+<script type="text/javascript" async="async" src="http://ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" async="async" src="http://api.polygonpla.net/js/pot/1.18/pot.min.js"></script>
+<script type="text/javascript" async="async" src="https://github.com/polygonplanet/Unzipper.js/raw/master/src/inflate.js"></script>
+<script type="text/javascript" async="async" src="https://github.com/polygonplanet/Unzipper.js/raw/master/src/unzipper.js"></script>
+<script>
+setTimeout(function() {
+  var done;
+
+  void function loadback() {
+    if (typeof $ === 'undefined' ||
+        typeof Pot === 'undefined' ||
+        typeof Unzipper === 'undefined' ||
+        typeof zip_inflate === 'undefined') {
+      setTimeout(loadback, 32);
+
+    } else if (!done) {
+      done = true;
+      doit();
+    }
+  }();
+
+
+  function valid(name, force) {
+    if (force || Pot.lower(Pot.getExt(name)) !== 'zip') {
+      var warn = $('<div/>')
+        .css({color : 'red'})
+        .text('This is not zip file.')
+        .appendTo('#container');
+
+      Pot.callLater(2.5, function() {
+        warn.fadeOut(function() {
+          warn.empty().remove();
+        });
+      });
+      return false;
+    } else {
+      return true;
+    }
+  }
+
+
+  function doit() {
+    var container = $('#container');
+
+    return Pot.Deferred.begin(function() {
+      var panel = $('#drop')
+        .remove()
+        .appendTo('body');
+
+      $('#drop-wrap').remove();
+
+      var loading = $('<div/>')
+        .css({
+          margin     : '0.5em',
+          fontWeight : 'bold'
+        })
+        .text('loading...');
+
+      var dropFile = new Pot.DropFile(panel, {
+        onShow : function() {
+          panel.show();
+        },
+        onHide : function() {
+          panel.hide();
+        },
+        onLoadImage : function(data, name, size, type) {
+          valid(name, true);
+        },
+        onLoadText : function(data, name, size, type) {
+          valid(name, true);
+        },
+        onLoadUnknown : function(data, name, size, type) {
+          if (!valid(name)) {
+            return;
+          }
+
+          $('<div/>')
+            .text(
+              Pot.sprintf('name: %s, type: %s, size: %d',
+                name, type, size
+              )
+            )
+            .appendTo(container);
+
+          loading.appendTo(container);
+
+          var unzipper = new Unzipper();
+
+          unzipper.unzip(data, size, function(res) {
+            if (res) {
+              $('<p/>')
+                .text(
+                  Pot.sprintf('name: %s, date: %s',
+                    res.name,
+                    Pot.date('Y-m-d H:i:s', res.time)
+                  )
+                )
+                .appendTo(container);
+
+              $('<textarea/>')
+                .val(res.data)
+                .appendTo(container);
+            }
+
+          }, function(err) {
+            $('<h3/>')
+              .css({color : 'red'})
+              .text(Pot.getErrorMessage(err))
+              .appendTo(container);
+
+          }).ensure(function(res) {
+            loading.remove();
+
+            $('<h2/>')
+              .css({color : 'blue'})
+              .text('Done.')
+              .appendTo(container);
+
+            if (Pot.isError(res)) {
+              throw res;
+            }
+            //Pot.debug(res);
+
+          });
+        }
+      });
+    });
+  }
+
+}, 200);
+</script>
+<style>
+#drop-wrap {
+  display: none;
+}
+
+#drop {
+  position: fixed;
+  left: 10%;
+  top: 10%;
+  width: 80%;
+  height: 80%;
+  min-height: 200;
+  background: #ff8cd3;
+  z-index: 9999999;
+  display: table;
+  text-align: center;
+  -webkit-box-shadow: 1px 1px 10px #333;
+  -moz-box-shadow: 1px 1px 10px #333;
+  box-shadow: 1px 1px 10px #333;
+}
+
+#drop .drop-text {
+  display: table-cell;
+  color: #fff;
+  font-weight: bold;
+  vertical-align: middle;
+  font-size: 160%;
+}
+
+textarea {
+  width: 98%;
+  height: 200px;
+}
+
+#container {
+  margin: 1em;
+}
+
+#footer {
+  margin: 0.5em auto;
+  text-align: center;
+}
+</style>
+</head>
+<body>
+<h1>Unzip and Drop file in JavaScript</h1>
+<h2>Inflate with asynchronous.</h2>
+<p>
+ 適当な zip ファイルをデスクトップなどからドロップすると解凍したデータが表示されます。
+ <br>
+ 非同期で処理しているので、たぶん重いファイルでも負荷なく解凍できます。
+</p>
+<p>
+ HTML5 File API, ArrayBuffer, DropEvent がサポートされてるブラウザのみ動きます (Firefox, GoogleChrome etc.)
+</p>
+<p>
+ Drop zip file here.
+</p>
+<div id="drop-wrap">
+  <div id="drop">
+    <div class="drop-text">Drop zip file here.</div>
+  </div>
+</div>
+
+<div id="container"></div>
+
+<p id="footer">
+ Last modified: 2012-04-17
+ Written by <a href="http://twitter.com/polygon_planet" title="Twitter @polygon_planet" target="_blank">polygon planet</a>
+ <a href="https://github.com/polygonplanet/Unzipper.js" title="polygonplanet/Unzipper.js - GitHub">GitHub</a>
+</p>
+</body>
+</html>
