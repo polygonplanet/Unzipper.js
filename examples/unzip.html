@@ -8,6 +8,7 @@
 <script type="text/javascript" async="async" src="http://api.polygonpla.net/js/pot/1.18/pot.min.js"></script>
 <script type="text/javascript" async="async" src="https://github.com/polygonplanet/Unzipper.js/raw/master/src/inflate.js"></script>
 <script type="text/javascript" async="async" src="https://github.com/polygonplanet/Unzipper.js/raw/master/src/unzipper.js"></script>
+<script type="text/javascript" async="async" src="https://github.com/polygonplanet/Unzipper.js/raw/master/src/encoding.js"></script>
 <script>
 setTimeout(function() {
   var done;
@@ -16,6 +17,7 @@ setTimeout(function() {
     if (typeof $ === 'undefined' ||
         typeof Pot === 'undefined' ||
         typeof Unzipper === 'undefined' ||
+        typeof Encoding === 'undefined' ||
         typeof zip_inflate === 'undefined') {
       setTimeout(loadback, 32);
 
@@ -186,6 +188,8 @@ textarea {
  適当な zip ファイルをデスクトップなどからドロップすると解凍したデータが表示されます。
  <br>
  非同期で処理しているので、たぶん重いファイルでも負荷を抑えて解凍できます (その場合メモリに注意)。
+ <br>
+ 文字コードは UTF-8 に合わせて変換して表示します。
 </p>
 <p>
  HTML5 File API, ArrayBuffer, DropEvent がサポートされてるブラウザのみ動きます (Firefox, GoogleChrome etc.)
@@ -202,7 +206,7 @@ textarea {
 <div id="container"></div>
 
 <p id="footer">
- Last modified: 2012-04-17
+ Last modified: 2012-04-24
  Written by <a href="http://twitter.com/polygon_planet" title="Twitter @polygon_planet" target="_blank">polygon planet</a>
  <a href="https://github.com/polygonplanet/Unzipper.js" title="polygonplanet/Unzipper.js - GitHub">GitHub</a>
 </p>
