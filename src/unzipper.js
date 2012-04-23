@@ -171,16 +171,16 @@ Unzipper.prototype = {
       var encoding, d;
 
       if (typeof Encoding !== 'undefined' && Encoding.convert) {
-        if (!this.convertEncoding ||
-            typeof this.convertEncoding !== 'string') {
+        if (!that.convertEncoding ||
+            typeof that.convertEncoding !== 'string') {
           encoding = 'UTF8';
         } else {
-          encoding = this.convertEncoding;
+          encoding = that.convertEncoding;
         }
         d = Pot.Deferred.begin(function() {
           return Encoding.convert(data, encoding);
         }).then(function(res) {
-          return Pot.Deferred.wait(2).then(function() {
+          return Pot.Deferred.wait(1.5).then(function() {
             return res;
           });
         });
@@ -191,7 +191,7 @@ Unzipper.prototype = {
         return Pot.utf8Decode(that.arrayBufferToBinary(res));
       });
 
-    }).wait(1.5).then(function(data) {
+    }).wait(1).then(function(data) {
       var result = {
         name : headers.filename,
         data : data,
