@@ -94,6 +94,7 @@ setTimeout(function() {
 
           var unzipper = new Unzipper();
 
+          unzipper.convertEncodingToUTF8 = true;
           unzipper.unzip(data, size, function(res) {
             if (res) {
               $('<p/>')
@@ -113,7 +114,7 @@ setTimeout(function() {
           }, function(err) {
             $('<h3/>')
               .css({color : 'red'})
-              .text(Pot.getErrorMessage(err))
+              .text(Pot.isString(err) ? err : Pot.getErrorMessage(err))
               .appendTo(container);
 
           }).ensure(function(res) {
