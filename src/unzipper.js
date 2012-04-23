@@ -3,7 +3,7 @@
  *
  *   Unzip a zip file with asynchronous.
  *
- *   Version 1.01, 2012-04-24
+ *   Version 1.02, 2012-04-24
  *   Copyright (c) 2012 polygon planet <http://twitter.com/polygon_planet>
  *   licensed under the GPL or MIT licenses.
  *-------------------------------------------------------------------------*/
@@ -54,7 +54,7 @@ var Unzipper = Pot.update(function() {}, {
  /**
   * @type {Object}
   */
-  DIRECTORY : {}
+  DIRECTORY : new Error()
 });
 
 Unzipper.prototype = {
@@ -70,9 +70,13 @@ Unzipper.prototype = {
    */
   fileSize : null,
   /**
+   * @type {Boolean}
+   */
+  convertEncodingToUTF8 : false,
+  /**
    * @type {Boolean|String}
    */
-  convertEncoding : false,
+  encodingAvailable : false,
   /**
    * @param {String} dataUri
    * @param {Number} size
@@ -85,6 +89,10 @@ Unzipper.prototype = {
 
     this.stream = new UnzipStream();
     this.fileSize = +size;
+
+    if (typeof Encoding !== 'undefined' && Encoding.convert) {
+      this.encodingAvailable = true;
+    }
 
     return Pot.Deferred.begin(function() {
       return that.base64Decode(
@@ -168,17 +176,11 @@ Unzipper.prototype = {
       return d;
 
     }).wait(0.5).then(function(data) {
-      var encoding, d;
+      var d;
 
-      if (typeof Encoding !== 'undefined' && Encoding.convert) {
-        if (!that.convertEncoding ||
-            typeof that.convertEncoding !== 'string') {
-          encoding = 'UTF8';
-        } else {
-          encoding = that.convertEncoding;
-        }
+      if (that.encodingAvailable && that.convertEncodingToUTF8) {
         d = Pot.Deferred.begin(function() {
-          return Encoding.convert(data, encoding);
+          return Encoding.convert(data, 'UTF8');
         }).then(function(res) {
           return Pot.Deferred.wait(1.5).then(function() {
             return res;
@@ -205,10 +207,12 @@ Unzipper.prototype = {
 
     }).rescue(function(err) {
       if (err !== Unzipper.DIRECTORY) {
-        if (errback) {
-          errback(err);
+        if (err && Pot.getErrorMessage(err).length) {
+          if (errback) {
+            errback(err);
+          }
+          throw err;
         }
-        throw err;
       }
     });
   },
@@ -304,12 +308,30 @@ Unzipper.prototype = {
       });
 
     }).then(function() {
+      var doConvert = !!(that.encodingAvailable && that.convertEncodingToUTF8);
+
       if (headers.filenameLen === 0) {
         return '';
       } else {
-        return that.arrayBufferToBinary(
-          that.stream.read(headers.filenameLen)
-        );
+        return Pot.Deferred.begin(function() {
+          var nameData = that.stream.read(headers.filenameLen);
+
+          if (doConvert) {
+            return Encoding.convert(nameData, 'UTF8');
+          } else {
+            return nameData;
+          }
+
+        }).then(function(res) {
+          return that.arrayBufferToBinary(res);
+
+        }).then(function(res) {
+          if (doConvert) {
+            return Pot.utf8Decode(res);
+          } else {
+            return res;
+          }
+        });
       }
 
     }).then(function(filename) {
