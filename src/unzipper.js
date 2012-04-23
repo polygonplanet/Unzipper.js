@@ -3,7 +3,7 @@
  *
  *   Unzip a zip file with asynchronous.
  *
- *   Version 1.00, 2012-04-17
+ *   Version 1.01, 2012-04-24
  *   Copyright (c) 2012 polygon planet <http://twitter.com/polygon_planet>
  *   licensed under the GPL or MIT licenses.
  *-------------------------------------------------------------------------*/
@@ -69,6 +69,10 @@ Unzipper.prototype = {
    * @type {Number}
    */
   fileSize : null,
+  /**
+   * @type {Boolean|String}
+   */
+  convertEncoding : false,
   /**
    * @param {String} dataUri
    * @param {Number} size
@@ -163,10 +167,31 @@ Unzipper.prototype = {
       }
       return d;
 
-    }).wait(0).then(function(data) {
-      return Pot.utf8Decode(that.arrayBufferToBinary(data));
+    }).wait(0.5).then(function(data) {
+      var encoding, d;
 
-    }).wait(0.1).then(function(data) {
+      if (typeof Encoding !== 'undefined' && Encoding.convert) {
+        if (!this.convertEncoding ||
+            typeof this.convertEncoding !== 'string') {
+          encoding = 'UTF8';
+        } else {
+          encoding = this.convertEncoding;
+        }
+        d = Pot.Deferred.begin(function() {
+          return Encoding.convert(data, encoding);
+        }).then(function(res) {
+          return Pot.Deferred.wait(2).then(function() {
+            return res;
+          });
+        });
+      } else {
+        d = Pot.Deferred.succeed(data);
+      }
+      return d.then(function(res) {
+        return Pot.utf8Decode(that.arrayBufferToBinary(res));
+      });
+
+    }).wait(1.5).then(function(data) {
       var result = {
         name : headers.filename,
         data : data,
