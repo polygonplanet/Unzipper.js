@@ -1,7 +1,7 @@
 /*!
  * Encoding.js - Converts character encoding.
  *
- * Version 1.00, 2012-04-24
+ * Version 1.02, 2012-04-25
  * Copyright (c) 2012 polygon planet <polygon.planet.aqua@gmail.com>
  * Dual licensed under the MIT or GPL v2 licenses.
  * http://polygonpla.net/
@@ -12,8 +12,8 @@
  * @description    Converts character encoding.
  * @fileoverview   Encoding library
  * @author         polygon planet
- * @version        1.00
- * @date           2012-04-24
+ * @version        1.02
+ * @date           2012-04-25
  * @link           http://polygonpla.net/
  * @copyright      Copyright (c) 2012 polygon planet <polygon.planet.aqua@gmail.com>
  * @license        Dual licensed under the MIT or GPL v2 licenses.
@@ -24,7 +24,7 @@
  */
 /*
  * Usage:
- *   var utf8Array = Uint16Array(...) or [...];
+ *   var utf8Array = new Uint8Array(...) or [...];
  *   var sjisArray = Encoding.convert(utf8Array, 'SJIS', 'UTF8');
  *
  * Detect:
@@ -469,7 +469,7 @@ Encoding = {
         }
       }
     }
-    return $result;
+    return false;
   },
   /**
    * UTF-16BE (big-endian)
