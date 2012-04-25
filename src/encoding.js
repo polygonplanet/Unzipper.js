@@ -1084,7 +1084,7 @@ Encoding = {
                  (data[++i] <<  8) +
                  (data[++i] & 0xFF);
         }
-        if ($ENCODING_UTF8_TO_JIS_MAPS[$utf8] === void 0) {
+        if (ENCODING_UTF8_TO_JIS_MAPS[utf8] === void 0) {
           r[r.length] = UTF8_UNKNOWN;
         } else {
           jis = ENCODING_UTF8_TO_JIS_MAPS[utf8];
