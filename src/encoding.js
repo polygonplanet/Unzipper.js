@@ -1,7 +1,7 @@
 /*!
  * Encoding.js - Converts character encoding.
  *
- * Version 1.03, 2012-07-28
+ * Version 1.04, 2012-07-29
  * Copyright (c) 2012 polygon planet <polygon.planet.aqua@gmail.com>
  * Dual licensed under the MIT or GPL v2 licenses.
  * http://polygonpla.net/
@@ -12,8 +12,8 @@
  * @description    Converts character encoding.
  * @fileoverview   Encoding library
  * @author         polygon planet
- * @version        1.03
- * @date           2012-07-28
+ * @version        1.04
+ * @date           2012-07-29
  * @link           http://polygonpla.net/
  * @copyright      Copyright (c) 2012 polygon planet <polygon.planet.aqua@gmail.com>
  * @license        Dual licensed under the MIT or GPL v2 licenses.
@@ -41,24 +41,54 @@
  *   // 文字コード判別 (戻り値は下の"Available Encodings"のいずれか)
  *   var encoding = Encoding.detect(utf8Array);
  *   if (encoding === 'UTF8') {
- *     // ...
+ *     alert('UTF-8です');
  *   }
  *
- * Detect:
- *   var enc = Encoding.detect(utf8Array);
- *   if (enc === 'UTF8') {
- *     // ...
- *   }
  *
  * Available Encodings:
- *  - UTF32  (detect only)
- *  - UTF16
- *  - BINARY (detect only)
- *  - ASCII  (detect only)
- *  - JIS
- *  - UTF8
- *  - EUCJP
- *  - SJIS
+ *  - 'UTF32'   (detect only)
+ *  - 'UTF16'   (detect only)
+ *  - 'BINARY'  (detect only)
+ *  - 'ASCII'   (detect only)
+ *  - 'JIS'
+ *  - 'UTF8'
+ *  - 'EUCJP'
+ *  - 'SJIS'
+ *  - 'UNICODE' (JavaScript Unicode String/Array)
+ *
+ *
+ * Detect:
+ *   // 自動判別
+ *   var enc = Encoding.detect(utf8Array);
+ *   if (enc === 'UTF8') {
+ *     alert('UTF-8です');
+ *   }
+ *
+ *   // 文字コード指定判別
+ *   var isSJIS = Encoding.detect(sjisArray, 'SJIS');
+ *   if (isSJIS) {
+ *     alert('SJISです');
+ *   }
+ *
+ *
+ * URL Encode/Decode:
+ *   // 文字コードの配列をURLエンコード/デコード
+ *   var sjisArray = [
+ *     130, 177, 130, 241, 130, 201, 130, 191, 130, 205, 129,
+ *      65, 130, 217, 130, 176, 129, 153, 130, 210, 130, 230
+ *   ];
+ *   var encoded = Encoding.urlEncode(sjisArray);
+ *   console.log(encoded);
+ *   // output:
+ *   //   '%82%B1%82%F1%82%C9%82%BF%82%CD%81A%82%D9%82%B0%81%99%82%D2%82%E6'
+ *   //
+ *   var decoded = Encoding.urlDecode(encoded);
+ *   console.log(decoded);
+ *   // output: [
+ *   //   130, 177, 130, 241, 130, 201, 130, 191, 130, 205, 129,
+ *   //    65, 130, 217, 130, 176, 129, 153, 130, 210, 130, 230
+ *   // ]
+ *
  *
  * Example:
  *   var eucjpArray = [
@@ -75,14 +105,17 @@
  *   // ]
  *   //   => 'こんにちは、ほげ☆ぴよ'
  *
+ *
  * Example (Auto detect):
  *   var sjisArray = [
  *     130, 177, 130, 241, 130, 201, 130, 191, 130, 205, 129,
  *      65, 130, 217, 130, 176, 129, 153, 130, 210, 130, 230
  *   ];
- *   var unicodeArray = Encoding.convert(sjisArray, 'UTF16', 'AUTO');
- *   console.log( String.fromCharCode.apply(null, unicodeArray) );
+ *   var unicodeArray = Encoding.convert(sjisArray, 'UNICODE', 'AUTO');
+ *   // codeToStringは文字コード配列を文字列に変換(連結)して返す
+ *   console.log( Encoding.codeToString(unicodeArray) );
  *   // output: 'こんにちは、ほげ☆ぴよ'
+ *
  */
 (function (globals) {
 'use strict';
@@ -121,7 +154,8 @@ Encoding = {
     'JIS',
     'UTF8',
     'EUCJP',
-    'SJIS'
+    'SJIS',
+    'UNICODE'
   ],
   /**
    * @ignore
@@ -231,6 +265,87 @@ Encoding = {
     return data;
   },
   /**
+   * Encode a character code array to URL string like encodeURIComponent.
+   *
+   * @param  {Array|TypedArray}  data The data being encoded.
+   * @return {String}                 The percent encoded string.
+   *
+   * @public
+   * @function
+   */
+  urlEncode : function(data) {
+    var p = [], i = 0, len = data.length, b,
+        sc = String.fromCharCode;
+
+    for (; i < len; i++) {
+      b = data[i];
+
+      if (b > 0xFF) {
+        return encodeURIComponent(Encoding.codeToString(data));
+      }
+
+      if ((b >= 0x61 /*a*/ && b <= 0x7A /*z*/) ||
+          (b >= 0x41 /*A*/ && b <= 0x5A /*Z*/) ||
+          (b >= 0x30 /*0*/ && b <= 0x39 /*9*/) ||
+          b === 0x21 /*!*/ ||
+          (b >= 0x27 /*'*/ && b <= 0x2A /***/) ||
+          b === 0x2D /*-*/ || b === 0x2E /*.*/ ||
+          b === 0x5F /*_*/ || b === 0x7E /*~*/
+      ) {
+        p[p.length] = sc(b);
+      } else {
+        p[p.length] = '%' + b.toString(16).toUpperCase();
+      }
+    }
+    return p.join('');
+  },
+  /**
+   * Decode a percent encoded string to
+   *  character code array like decodeURIComponent.
+   *
+   * @param  {String}  string  The data being decoded.
+   * @return {Array}           The decoded array.
+   *
+   * @public
+   * @function
+   */
+  urlDecode : function(string) {
+    var r = [], i = 0, len = string && string.length, c;
+
+    while (i < len) {
+      c = string.charCodeAt(i++);
+      if (c === 0x25 /*%*/) {
+        r[r.length] = parseInt(string.charAt(i++) + string.charAt(i++), 16);
+      } else {
+        r[r.length] = c;
+      }
+    }
+    return r;
+  },
+  /**
+   * Joins a character code array to string.
+   *
+   * @param  {Array|TypedArray}  data  The data being joined.
+   * @return {String}                  The joined string.
+   *
+   * @public
+   * @function
+   */
+  codeToString : function(data) {
+    var sc = String.fromCharCode, r, i, len;
+
+    try {
+      return sc.apply(String, data);
+    } catch (e) {}
+
+    r = [];
+    len = data && data.length;
+    for (i = 0; i < len; i++) {
+      r[r.length] = sc(data[i]);
+    }
+    return r.join('');
+  },
+  /**
    * Binary (exe, images, so, etc.)
    *
    * Note:
@@ -250,6 +365,9 @@ Encoding = {
     if (data && data.length) {
       len = data.length;
       for (; i < len; i++) {
+        if (data[i] > 0xFF) {
+          return false;
+        }
         for (j = 0; j < cn; j++) {
           if (data[i] === chars[j]) {
             return true;
@@ -270,10 +388,9 @@ Encoding = {
 
     for (; i < len; i++) {
       b = data[i];
-      if (b >= 0x80 && b <= 0xFF) {
-        return false;
-      }
-      if (b === 0x1B) {
+      if (b > 0xFF ||
+          (b >= 0x80 && b <= 0xFF) ||
+          b === 0x1B) {
         return false;
       }
     }
@@ -292,6 +409,9 @@ Encoding = {
     var result = true, i = 0, len = data.length;
 
     for (; i < len; i++) {
+      if (data[i] > 0xFF) {
+        return false;
+      }
       if ((data[i] === 0x09 || data[i] === 0x0A  ||
            data[i] === 0x0D || data[i] === 0x20) ||
           (data[i]  >  0x20 && data[i]  <  0x7F) ||
@@ -315,7 +435,7 @@ Encoding = {
 
     for (; i < len; i++) {
       b = data[i];
-      if (b >= 0x80 && b <= 0xFF) {
+      if (b > 0xFF || (b >= 0x80 && b <= 0xFF)) {
         return false;
       }
       if (b === 0x1B) {
@@ -350,7 +470,7 @@ Encoding = {
       if (b < 0x80) {
         continue;
       }
-      if (b < 0x8E) {
+      if (b > 0xFF || b < 0x8E) {
         return false;
       }
       if (b === 0x8E) {
@@ -384,7 +504,12 @@ Encoding = {
   isSJIS : function(data) {
     var i = 0, len = data.length, b;
 
-    while (i < len && data[i++] > 0x80);
+    while (i < len && data[i] > 0x80) {
+      if (data[i++] > 0xFF) {
+        return false;
+      }
+    }
+
     for (; i < len; i++) {
       b = data[i];
       if (b <= 0x80 ||
@@ -417,7 +542,12 @@ Encoding = {
       return true; //XXX: BOM (Should be?)
     }
 
-    while (i < len && data[i++] > 0x80);
+    while (i < len && data[i] > 0x80) {
+      if (data[i++] > 0xFF) {
+        return false;
+      }
+    }
+
     for (; i < len; i++) {
       b = data[i];
       if (b < 0x80) {
@@ -466,7 +596,11 @@ Encoding = {
     var i = 0, len = data.length,
         b1, b2, pos = null, next, prev;
 
-    if (len >= 2) {
+    if (len < 2) {
+      if (data[0] > 0xFF) {
+        return false;
+      }
+    } else {
       b1 = data[0];
       b2 = data[1];
       if (b1 === 0xFF && // BOM (little-endian)
@@ -482,6 +616,8 @@ Encoding = {
         if (data[i] === 0x00) {
           pos = i;
           break;
+        } else if (data[i] > 0xFF) {
+          return false;
         }
       }
       if (pos === null) {
@@ -526,7 +662,11 @@ Encoding = {
   isUTF16BE : function(data) {
     var i = 0, len = data.length, pos = null, b1, b2, b;
 
-    if (len >= 2) {
+    if (len < 2) {
+      if (data[0] > 0xFF) {
+        return false;
+      }
+    } else {
       b1 = data[0];
       b2 = data[1];
       if (b1 === 0xFE && // BOM
@@ -538,6 +678,8 @@ Encoding = {
         if (data[i] === 0x00) {
           pos = i;
           break;
+        } else if (data[i] > 0xFF) {
+          return false;
         }
       }
       if (pos === null) {
@@ -560,7 +702,11 @@ Encoding = {
   isUTF16LE : function(data) {
     var i = 0, len = data.length, pos = null, b1, b2, b;
 
-    if (len >= 2) {
+    if (len < 2) {
+      if (data[0] > 0xFF) {
+        return false;
+      }
+    } else {
       b1 = data[0];
       b2 = data[1];
       if (b1 === 0xFF && // BOM
@@ -572,6 +718,8 @@ Encoding = {
         if (data[i] === 0x00) {
           pos = i;
           break;
+        } else if (data[i] > 0xFF) {
+          return false;
         }
       }
       if (pos === null) {
@@ -598,7 +746,13 @@ Encoding = {
     var i = 0, len = data.length, pos = null,
         b1, b2, b3, b4, next;
 
-    if (len >= 4) {
+    if (len < 4) {
+      for (; i < len; i++) {
+        if (data[i] > 0xFF) {
+          return false;
+        }
+      }
+    } else {
       b1 = data[0];
       b2 = data[1];
       b3 = data[2];
@@ -616,6 +770,8 @@ Encoding = {
         if (data[i] === 0x00) {
           pos = i;
           break;
+        } else if (data[i] > 0xFF) {
+          return false;
         }
       }
       if (pos === null) {
@@ -641,6 +797,23 @@ Encoding = {
       }
     }
     return false;
+  },
+  /**
+   * JavaScript Unicode array
+   *
+   * @private
+   * @ignore
+   */
+  isUNICODE : function(data) {
+    var i = 0, len = data.length, c;
+
+    for (; i < len; i++) {
+      c = data[i];
+      if (c < 0 || c > 0x10FFFF) {
+        return false;
+      }
+    }
+    return true;
   },
   /**
    * JIS to SJIS
@@ -1269,13 +1442,13 @@ Encoding = {
     return r;
   },
   /**
-   * UTF-16 to UTF-8
+   * UTF-16 (JavaScript Unicode array) to UTF-8
    *
    * @private
    * @ignore
    * based: Pot.js (UTF8.js)
    */
-  UTF16ToUTF8 : function() {
+  UNICODEToUTF8 : function() {
     /**@ignore*/
     var add = function(b, c) {
       if (c < 0x80) {
@@ -1316,13 +1489,13 @@ Encoding = {
     };
   }(),
   /**
-   * UTF-8 to UTF-16
+   * UTF-8 to UTF-16 (JavaScript Unicode array)
    *
    * @private
    * @ignore
    * based: Pot.js (UTF8.js)
    */
-  UTF8ToUTF16 : function(data) {
+  UTF8ToUNICODE : function(data) {
     var r = [], i = 0, len = data.length,
         n, c, c2, c3, c4, code;
 
@@ -1360,58 +1533,58 @@ Encoding = {
     return r;
   },
   /**
-   * UTF16 to JIS
+   * UTF-16 (JavaScript Unicode array) to JIS
    *
    * @private
    * @ignore
    */
-  UTF16ToJIS : function(data) {
-    return Encoding.UTF8ToJIS(Encoding.UTF16ToUTF8(data));
+  UNICODEToJIS : function(data) {
+    return Encoding.UTF8ToJIS(Encoding.UNICODEToUTF8(data));
   },
   /**
-   * JIS to UTF16
+   * JIS to UTF-16 (JavaScript Unicode array)
    *
    * @private
    * @ignore
    */
-  JISToUTF16 : function(data) {
-    return Encoding.UTF8ToUTF16(Encoding.JISToUTF8(data));
+  JISToUNICODE : function(data) {
+    return Encoding.UTF8ToUNICODE(Encoding.JISToUTF8(data));
   },
   /**
-   * UTF16 to EUCJP
+   * UTF-16 (JavaScript Unicode array) to EUCJP
    *
    * @private
    * @ignore
    */
-  UTF16ToEUCJP : function(data) {
-    return Encoding.UTF8ToEUCJP(Encoding.UTF16ToUTF8(data));
+  UNICODEToEUCJP : function(data) {
+    return Encoding.UTF8ToEUCJP(Encoding.UNICODEToUTF8(data));
   },
   /**
-   * EUCJP to UTF16
+   * EUCJP to UTF-16 (JavaScript Unicode array)
    *
    * @private
    * @ignore
    */
-  EUCJPToUTF16 : function(data) {
-    return Encoding.UTF8ToUTF16(Encoding.EUCJPToUTF8(data));
+  EUCJPToUNICODE : function(data) {
+    return Encoding.UTF8ToUNICODE(Encoding.EUCJPToUTF8(data));
   },
   /**
-   * UTF16 to SJIS
+   * UTF-16 (JavaScript Unicode array) to SJIS
    *
    * @private
    * @ignore
    */
-  UTF16ToSJIS : function(data) {
-    return Encoding.UTF8ToSJIS(Encoding.UTF16ToUTF8(data));
+  UNICODEToSJIS : function(data) {
+    return Encoding.UTF8ToSJIS(Encoding.UNICODEToUTF8(data));
   },
   /**
-   * SJIS to UTF16
+   * SJIS to UTF-16 (JavaScript Unicode array)
    *
    * @private
    * @ignore
    */
-  SJISToUTF16 : function(data) {
-    return Encoding.UTF8ToUTF16(Encoding.SJISToUTF8(data));
+  SJISToUNICODE : function(data) {
+    return Encoding.UTF8ToUNICODE(Encoding.SJISToUTF8(data));
   }
 },
 
