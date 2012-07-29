@@ -26,17 +26,19 @@ setTimeout(function() {
 
 
   function doit() {
-    $('.run').click(convert);
-  }
-
-
-  function arrayToString(data) {
-    return String.fromCharCode.apply(String, data);
+    $('#run').removeAttr('disabled').click(function() {
+      $(this).attr({disabled : 'disabled'});
+      convert();
+    });
   }
 
 
   function convert() {
     var d = $.Deferred();
+
+    var wrap = function(a, b, c) {
+      return a + ' (' + b + ' ' + c + ')';
+    };
 
     $.each(ENCODINGS, function(k, type) {
       d.done(function() {
@@ -44,14 +46,20 @@ setTimeout(function() {
 
         return request(fileName).then(function(bytes) {
           appendText('Open ', '.', fileName);
-          appendText(bytes.toString(), fileName + ' (' + type + ' Array)');
-          appendText(arrayToString(bytes), fileName + ' (' + type + ' String)');
+          appendText(bytes.toString(), wrap(fileName, type, 'Array'));
+          appendText(Encoding.codeToString(bytes), wrap(fileName, type, 'String'));
 
           // Convert to Unicode.
-          var encoded = Encoding.convert(bytes, 'UTF16');
+          var unicodes = Encoding.convert(bytes, 'UNICODE');
 
-          appendText(encoded, fileName + ' (' + type + ' => UTF-16 Array)');
-          appendText(arrayToString(encoded), fileName + ' (' + type + ' => UTF-16 String)');
+          var urlEncBytes = Encoding.urlEncode(bytes);
+          appendText(urlEncBytes, wrap(fileName, type, 'URL Encode'));
+
+          var urlDecBytes = Encoding.urlDecode(urlEncBytes);
+          appendText(urlDecBytes, wrap(fileName, type, 'URL Encode => URL Decode'));
+
+          appendText(unicodes, wrap(fileName, type, '=> Unicode Array'));
+          appendText(Encoding.codeToString(unicodes), wrap(fileName, type, '=> Unicode String'));
         });
       });
     });
@@ -61,23 +69,20 @@ setTimeout(function() {
 
   function request(url) {
     var d = $.Deferred();
-    var xhr = window.ActiveXObject ? new ActiveXObject('Microsoft.XMLHTTP')
-                                   : new XMLHttpRequest();
-    xhr.open('GET', url, true);
-    xhr.overrideMimeType('text/plain; charset=x-user-defined');
-    // or xhr.responseType = 'arraybuffer';
-    xhr.onreadystatechange = function(ev) {
-      if (this.readyState === 4 && this.status === 200) {
-        var bin = this.responseText;
+
+    $.ajax({
+      url      : url,
+      dataType : 'text',
+      mimeType : 'text/plain; charset=x-user-defined',
+      success  : function(data) {
         var bytes = [];
-        for (var i = 0, len = bin.length; i < len; i++) {
-          var c = bin.charCodeAt(i);
+        for (var i = 0, len = data.length; i < len; i++) {
+          var c = data.charCodeAt(i);
           bytes[bytes.length] = c & 0xFF;
         }
         d.resolve(bytes);
       }
-    };
-    xhr.send(null);
+    });
     return d;
   }
 
@@ -107,16 +112,21 @@ setTimeout(function() {
 }, 200);
 </script>
 <style>
+* {
+  font-family: verdana, sans-serif;
+}
+
 textarea {
   width: 98%;
   height: 2.5em;
+  font-family: consolas, monospace;
 }
 
 #container {
   margin: 1em;
 }
 
-.run {
+#run {
   font-size: 120%;
   font-weight: bold;
 }
@@ -136,13 +146,13 @@ textarea {
 </p>
 
 <div>
- <button type="button" class="run">Run</button>
+ <button type="button" id="run">Run</button>
 </div>
 
 <div id="container"></div>
 
 <p id="footer">
- Last modified: 2012-07-28
+ Last modified: 2012-07-29
  Written by <a href="http://twitter.com/polygon_planet" title="Twitter @polygon_planet" target="_blank">polygon planet</a>
  <a href="https://github.com/polygonplanet/Unzipper.js" title="polygonplanet/Unzipper.js - GitHub">GitHub</a>
 </p>
