@@ -1,8 +1,8 @@
 /*!
  * Encoding.js - Converts character encoding.
  *
- * Version 1.04, 2012-07-29
- * Copyright (c) 2012 polygon planet <polygon.planet.aqua@gmail.com>
+ * Version 1.05, 2013-04-14
+ * Copyright (c) 2013 polygon planet <polygon.planet.aqua@gmail.com>
  * Dual licensed under the MIT or GPL v2 licenses.
  * http://polygonpla.net/
  */
@@ -12,10 +12,10 @@
  * @description    Converts character encoding.
  * @fileoverview   Encoding library
  * @author         polygon planet
- * @version        1.04
- * @date           2012-07-29
+ * @version        1.05
+ * @date           2013-04-14
  * @link           http://polygonpla.net/
- * @copyright      Copyright (c) 2012 polygon planet <polygon.planet.aqua@gmail.com>
+ * @copyright      Copyright (c) 2013 polygon planet <polygon.planet.aqua@gmail.com>
  * @license        Dual licensed under the MIT or GPL v2 licenses.
  *
  * Based:
@@ -201,7 +201,7 @@ Encoding = {
 
     if (data && data.length) {
       if (enc) {
-        if (typeof enc.substr === 'function') {
+        if (typeof enc.substring === 'function') {
           enc = enc.toUpperCase().replace(RE.TRIM, '');
           if (enc === 'AUTO') {
             enc = Encoding.orders;
