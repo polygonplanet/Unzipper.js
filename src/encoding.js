@@ -294,7 +294,7 @@ Encoding = {
       ) {
         p[p.length] = sc(b);
       } else {
-        p[p.length] = '%' + b.toString(16).toUpperCase();
+        p[p.length] = (b < 0x10 ? '%0' : '%') + b.toString(16).toUpperCase();
       }
     }
     return p.join('');
