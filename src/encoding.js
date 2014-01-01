@@ -1,8 +1,8 @@
 /*!
  * Encoding.js - Converts character encoding.
  *
- * Version 1.05, 2013-04-14
- * Copyright (c) 2013 polygon planet <polygon.planet.aqua@gmail.com>
+ * Version 1.06, 2014-01-02
+ * Copyright (c) 2013-2014 polygon planet <polygon.planet.aqua@gmail.com>
  * Dual licensed under the MIT or GPL v2 licenses.
  * http://polygonpla.net/
  */
@@ -12,10 +12,10 @@
  * @description    Converts character encoding.
  * @fileoverview   Encoding library
  * @author         polygon planet
- * @version        1.05
- * @date           2013-04-14
+ * @version        1.06
+ * @date           2014-01-02
  * @link           http://polygonpla.net/
- * @copyright      Copyright (c) 2013 polygon planet <polygon.planet.aqua@gmail.com>
+ * @copyright      Copyright (c) 2013-2014 polygon planet <polygon.planet.aqua@gmail.com>
  * @license        Dual licensed under the MIT or GPL v2 licenses.
  *
  * Based:
@@ -117,7 +117,18 @@
  *   // output: 'こんにちは、ほげ☆ぴよ'
  *
  */
-(function (globals) {
+(function (name, context, factory) {
+
+  // Supports UMD. AMD, CommonJS/Node.js and browser context
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = factory();
+  } else if (typeof define === 'function' && define.amd) {
+    define(factory);
+  } else {
+    context[name] = factory();
+  }
+
+})('Encoding', this, function () {
 'use strict';
 
 var UTF8_UNKNOWN = '?'.charCodeAt(0),
@@ -335,8 +346,10 @@ Encoding = {
     var sc = String.fromCharCode, r, i, len;
 
     try {
-      return sc.apply(String, data);
-    } catch (e) {}
+      return sc.apply(null, data);
+    } catch (e) {
+      // ignore RangeError: arguments too large
+    }
 
     r = [];
     len = data && data.length;
@@ -866,12 +879,12 @@ Encoding = {
           }
           b2 += 0x7E;
         }
-        r[r.length] = b1;
-        r[r.length] = b2;
+        r[r.length] = b1 & 0xFF;
+        r[r.length] = b2 & 0xFF;
       } else if (m === 2) {
-        r[r.length] = data[i] + 0x80;
+        r[r.length] = data[i] + 0x80 & 0xFF;
       } else {
-        r[r.length] = data[i];
+        r[r.length] = data[i] & 0xFF;
       }
     }
     return r;
@@ -904,13 +917,13 @@ Encoding = {
       }
 
       if (m === 1) {
-        r[r.length] = data[i] + 0x80;
-        r[r.length] = data[++i] + 0x80;
+        r[r.length] = data[i] + 0x80 & 0xFF;
+        r[r.length] = data[++i] + 0x80 & 0xFF;
       } else if (m === 2) {
         r[r.length] = 0x8E;
-        r[r.length] = data[i] + 0x80;
+        r[r.length] = data[i] + 0x80 & 0xFF;
       } else {
-        r[r.length] = data[i];
+        r[r.length] = data[i] & 0xFF;
       }
     }
     return r;
@@ -938,7 +951,7 @@ Encoding = {
           r[r.length] = esc[7];
           r[r.length] = esc[8];
         }
-        r[r.length] = b1 - 0x80;
+        r[r.length] = b1 - 0x80 & 0xFF;
       } else if (b1 >= 0x80) {
         if (m !== 1) {
           m = 1;
@@ -967,8 +980,8 @@ Encoding = {
           }
           b2 -= 0x7E;
         }
-        r[r.length] = b1;
-        r[r.length] = b2;
+        r[r.length] = b1 & 0xFF;
+        r[r.length] = b2 & 0xFF;
       } else {
         if (m !== 0) {
           m = 0;
@@ -976,7 +989,7 @@ Encoding = {
           r[r.length] = esc[1];
           r[r.length] = esc[2];
         }
-        r[r.length] = b1;
+        r[r.length] = b1 & 0xFF;
       }
     }
     if (m !== 0) {
@@ -1022,10 +1035,10 @@ Encoding = {
           }
           b2 += 0x02;
         }
-        r[r.length] = b1;
-        r[r.length] = b2;
+        r[r.length] = b1 & 0xFF;
+        r[r.length] = b2 & 0xFF;
       } else {
-        r[r.length] = b1;
+        r[r.length] = b1 & 0xFF;
       }
     }
     return r;
@@ -1053,7 +1066,7 @@ Encoding = {
           r[r.length] = esc[7];
           r[r.length] = esc[8];
         }
-        r[r.length] = data[++i] - 0x80;
+        r[r.length] = data[++i] - 0x80 & 0xFF;
       } else if (b1 > 0x8E) {
         if (m !== 1) {
           m = 1;
@@ -1061,8 +1074,8 @@ Encoding = {
           r[r.length] = esc[4];
           r[r.length] = esc[5]
         }
-        r[r.length] = b1 - 0x80;
-        r[r.length] = data[++i] - 0x80;
+        r[r.length] = b1 - 0x80 & 0xFF;
+        r[r.length] = data[++i] - 0x80 & 0xFF;
       } else {
         if (m !== 0) {
           m = 0;
@@ -1070,7 +1083,7 @@ Encoding = {
           r[r.length] = esc[1];
           r[r.length] = esc[2];
         }
-        r[r.length] = b1;
+        r[r.length] = b1 & 0xFF;
       }
     }
     if (m !== 0) {
@@ -1114,12 +1127,12 @@ Encoding = {
           }
           b2 -= 0x02;
         }
-        r[r.length] = b1;
-        r[r.length] = b2;
+        r[r.length] = b1 & 0xFF;
+        r[r.length] = b2 & 0xFF;
       } else if (b1 === 0x8E) {
-        r[r.length] = data[++i];
+        r[r.length] = data[++i] & 0xFF;
       } else {
-        r[r.length] = b1;
+        r[r.length] = b1 & 0xFF;
       }
     }
     return r;
@@ -1140,8 +1153,8 @@ Encoding = {
         u2 = 0xBC | ((b2 >> 6) & 0x03);
         u3 = 0x80 | (b2 & 0x3F);
         r[r.length] = 0xEF;
-        r[r.length] = u2;
-        r[r.length] = u3;
+        r[r.length] = u2 & 0xFF;
+        r[r.length] = u3 & 0xFF;
       } else if (data[i] >= 0x80) {
         b1 = data[i] << 1;
         b2 = data[++i];
@@ -1180,7 +1193,7 @@ Encoding = {
           }
         }
       } else {
-        r[r.length] = data[i];
+        r[r.length] = data[i] & 0xFF;
       }
     }
     return r;
@@ -1201,8 +1214,8 @@ Encoding = {
         u2 = 0xBC | ((b2 >> 6) & 0x03);
         u3 = 0x80 | (b2 & 0x3F);
         r[r.length] = 0xEF;
-        r[r.length] = u2;
-        r[r.length] = u3;
+        r[r.length] = u2 & 0xFF;
+        r[r.length] = u3 & 0xFF;
       } else if (data[i] >= 0x80) {
         jis = ((data[i] - 0x80) << 8) + (data[++i] - 0x80);
         if (ENCODING_JIS_TO_UTF8_MAPS[jis] === void 0) {
@@ -1219,7 +1232,7 @@ Encoding = {
           }
         }
       } else {
-        r[r.length] = data[i];
+        r[r.length] = data[i] & 0xFF;
       }
     }
     return r;
@@ -1270,10 +1283,10 @@ Encoding = {
         u2 = 0xBC | ((b2 >> 6) & 0x03);
         u3 = 0x80 | (b2 & 0x3F);
         r[r.length] = 0xEF;
-        r[r.length] = u2;
-        r[r.length] = u3;
+        r[r.length] = u2 & 0xFF;
+        r[r.length] = u3 & 0xFF;
       } else {
-        r[r.length] = data[i];
+        r[r.length] = data[i] & 0xFF;
       }
     }
     return r;
@@ -1328,12 +1341,12 @@ Encoding = {
               }
               b2 += 0x7E;
             }
-            r[r.length] = b1;
-            r[r.length] = b2;
+            r[r.length] = b1 & 0xFF;
+            r[r.length] = b2 & 0xFF;
           }
         }
       } else {
-        r[r.length] = data[i];
+        r[r.length] = data[i] & 0xFF;
       }
     }
     return r;
@@ -1362,14 +1375,14 @@ Encoding = {
           jis = ENCODING_UTF8_TO_JIS_MAPS[utf8];
           if (jis < 0xFF) {
             r[r.length] = 0x8E;
-            r[r.length] = jis - 0x80;
+            r[r.length] = jis - 0x80 & 0xFF;
           } else {
-            r[r.length] = (jis >> 8) - 0x80;
-            r[r.length] = (jis & 0xFF) - 0x80;
+            r[r.length] = (jis >> 8) - 0x80 & 0xFF;
+            r[r.length] = (jis & 0xFF) - 0x80 & 0xFF;
           }
         }
       } else {
-        r[r.length] = data[i];
+        r[r.length] = data[i] & 0xFF;
       }
     }
     return r;
@@ -1412,7 +1425,7 @@ Encoding = {
               r[r.length] = esc[7];
               r[r.length] = esc[8];
             }
-            r[r.length] = jis;
+            r[r.length] = jis & 0xFF;
           } else {
             if (m !== 1) {
               m = 1;
@@ -1420,7 +1433,7 @@ Encoding = {
               r[r.length] = esc[4];
               r[r.length] = esc[5];
             }
-            r[r.length] = jis >> 8;
+            r[r.length] = jis >> 8 & 0xFF;
             r[r.length] = jis & 0xFF;
           }
         }
@@ -1431,7 +1444,7 @@ Encoding = {
           r[r.length] = esc[1];
           r[r.length] = esc[2];
         }
-        r[r.length] = data[i];
+        r[r.length] = data[i] & 0xFF;
       }
     }
     if (m !== 0) {
@@ -4402,10 +4415,5 @@ ENCODING_UTF8_TO_JIS_MAPS = {
 0xE98199:0x7423,0xE791A4:0x7424,0xE5879C:0x7425,0xE78699:0x7426
 };
 
-if (globals) {
-  globals.Encoding = Encoding;
-}
-
 return Encoding;
-
-}(this));
+});
