@@ -1,10 +1,9 @@
 /*!
  * Encoding.js - Converts character encoding.
  *
- * Version 1.06, 2014-01-02
+ * Version 1.0.8, 2014-09-14
  * Copyright (c) 2013-2014 polygon planet <polygon.planet.aqua@gmail.com>
  * Dual licensed under the MIT or GPL v2 licenses.
- * http://polygonpla.net/
  */
 /**
  * Encoding.js
@@ -12,110 +11,15 @@
  * @description    Converts character encoding.
  * @fileoverview   Encoding library
  * @author         polygon planet
- * @version        1.06
- * @date           2014-01-02
- * @link           http://polygonpla.net/
+ * @version        1.0.8
+ * @date           2014-09-14
+ * @link           https://github.com/polygonplanet/encoding.js
  * @copyright      Copyright (c) 2013-2014 polygon planet <polygon.planet.aqua@gmail.com>
  * @license        Dual licensed under the MIT or GPL v2 licenses.
  *
  * Based:
  *   - mbstring library
  *   - posql charset library
- */
-/*
- * Usage:
- *   // <script src="encoding.js"></script>
- *   //
- *   // Encoding というオブジェクトがグローバルに定義されます
- *   // 配列に対して変換または判別します
- *
- *   // 文字コード変換
- *   var utf8Array = new Uint8Array(...) or [...] or Array(...);
- *   var sjisArray = Encoding.convert(utf8Array, 'SJIS', 'UTF8');
- *
- *   // 自動判別で変換
- *   var sjisArray = Encoding.convert(utf8Array, 'SJIS');
- *   // or  
- *   var sjisArray = Encoding.convert(utf8Array, 'SJIS', 'AUTO');
- *
- *   // 文字コード判別 (戻り値は下の"Available Encodings"のいずれか)
- *   var encoding = Encoding.detect(utf8Array);
- *   if (encoding === 'UTF8') {
- *     alert('UTF-8です');
- *   }
- *
- *
- * Available Encodings:
- *  - 'UTF32'   (detect only)
- *  - 'UTF16'   (detect only)
- *  - 'BINARY'  (detect only)
- *  - 'ASCII'   (detect only)
- *  - 'JIS'
- *  - 'UTF8'
- *  - 'EUCJP'
- *  - 'SJIS'
- *  - 'UNICODE' (JavaScript Unicode String/Array)
- *
- *
- * Detect:
- *   // 自動判別
- *   var enc = Encoding.detect(utf8Array);
- *   if (enc === 'UTF8') {
- *     alert('UTF-8です');
- *   }
- *
- *   // 文字コード指定判別
- *   var isSJIS = Encoding.detect(sjisArray, 'SJIS');
- *   if (isSJIS) {
- *     alert('SJISです');
- *   }
- *
- *
- * URL Encode/Decode:
- *   // 文字コードの配列をURLエンコード/デコード
- *   var sjisArray = [
- *     130, 177, 130, 241, 130, 201, 130, 191, 130, 205, 129,
- *      65, 130, 217, 130, 176, 129, 153, 130, 210, 130, 230
- *   ];
- *   var encoded = Encoding.urlEncode(sjisArray);
- *   console.log(encoded);
- *   // output:
- *   //   '%82%B1%82%F1%82%C9%82%BF%82%CD%81A%82%D9%82%B0%81%99%82%D2%82%E6'
- *   //
- *   var decoded = Encoding.urlDecode(encoded);
- *   console.log(decoded);
- *   // output: [
- *   //   130, 177, 130, 241, 130, 201, 130, 191, 130, 205, 129,
- *   //    65, 130, 217, 130, 176, 129, 153, 130, 210, 130, 230
- *   // ]
- *
- *
- * Example:
- *   var eucjpArray = [
- *     164, 179, 164, 243, 164, 203, 164, 193, 164, 207, 161,
- *     162, 164, 219, 164, 178, 161, 249, 164, 212, 164, 232
- *   ];
- *   var utf8Array = Encoding.convert(eucjpArray, 'UTF8', 'EUCJP');
- *   console.log( utf8Array );
- *   // output: [
- *   //   227, 129, 147, 227, 130, 147, 227, 129, 171,
- *   //   227, 129, 161, 227, 129, 175, 227, 128, 129,
- *   //   227, 129, 187, 227, 129, 146, 226, 152, 134,
- *   //   227, 129, 180, 227, 130, 136
- *   // ]
- *   //   => 'こんにちは、ほげ☆ぴよ'
- *
- *
- * Example (Auto detect):
- *   var sjisArray = [
- *     130, 177, 130, 241, 130, 201, 130, 191, 130, 205, 129,
- *      65, 130, 217, 130, 176, 129, 153, 130, 210, 130, 230
- *   ];
- *   var unicodeArray = Encoding.convert(sjisArray, 'UNICODE', 'AUTO');
- *   // codeToStringは文字コード配列を文字列に変換(連結)して返す
- *   console.log( Encoding.codeToString(unicodeArray) );
- *   // output: 'こんにちは、ほげ☆ぴよ'
- *
  */
 (function (name, context, factory) {
 
@@ -146,11 +50,15 @@ RE = {
 /**
  * Encoding.
  *
+ * @name Encoding
  * @type {Object}
  * @public
- * @static
+ * @class
  */
 Encoding = {
+  /**
+   * @lends Encoding
+   */
   /**
    * Encoding orders.
    *
@@ -266,7 +174,10 @@ Encoding = {
           (from.indexOf && ~from.indexOf(','))
       ) {
         from = Encoding.detect(data);
+      } else {
+        from = Encoding.assign(from);
       }
+
       to = Encoding.assign(to);
       func = Encoding[from + 'To' + to];
       if (func) {
