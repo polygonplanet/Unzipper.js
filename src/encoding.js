@@ -4,8 +4,8 @@
  * @description    Converts character encoding.
  * @fileOverview   Encoding library
  * @author         polygon planet
- * @version        1.0.15
- * @date           2014-12-13
+ * @version        1.0.16
+ * @date           2014-12-15
  * @link           https://github.com/polygonplanet/encoding.js
  * @copyright      Copyright (c) 2013-2014 polygon planet <polygon.planet.aqua@gmail.com>
  * @license        licensed under the MIT license.
@@ -14,7 +14,11 @@
  *   - mbstring library
  *   - posql charset library
  *   - libxml2
+ *   - pot.js
  */
+
+/*jshint bitwise:false,eqnull:true,newcap:false */
+
 (function (name, context, factory) {
 
 // Supports UMD. AMD, CommonJS/Node.js and browser context
@@ -39,6 +43,32 @@ var fromCharCode = String.fromCharCode;
 var slice = Array.prototype.slice;
 var toString = Object.prototype.toString;
 var hasOwnProperty = Object.prototype.hasOwnProperty;
+
+var HAS_TYPED = typeof Uint8Array !== 'undefined' &&
+                typeof Uint16Array !== 'undefined';
+
+// Test for String.fromCharCode.apply.
+var CAN_CHARCODE_APPLY = false;
+var CAN_CHARCODE_APPLY_TYPED = false;
+
+try {
+  if (fromCharCode.apply(null, [0x61]) === 'a') {
+    CAN_CHARCODE_APPLY = true;
+  }
+} catch (e) {}
+
+if (HAS_TYPED) {
+  try {
+    if (fromCharCode.apply(null, new Uint8Array([0x61])) === 'a') {
+      CAN_CHARCODE_APPLY_TYPED = true;
+    }
+  } catch (e) {}
+}
+
+// Function.prototype.apply stack max range
+var APPLY_BUFFER_SIZE = 65533;
+var APPLY_BUFFER_SIZE_OK = null;
+
 
 /**
  * Encoding names.
@@ -156,7 +186,7 @@ var Encoding = {
    * If encodings is "AUTO", or the encoding-list as an array, or
    *   comma separated list string it will be detected automatically.
    *
-   * @param {Array.<number>|TypedArray} data The data being detected.
+   * @param {Array.<number>|TypedArray|string} data The data being detected.
    * @param {(Object|string|Array.<string>)=} [encodings] The encoding-list of
    *   character encoding.
    * @return {string|boolean} The detected character encoding, or false.
@@ -171,6 +201,10 @@ var Encoding = {
 
     if (isObject(encodings)) {
       encodings = encodings.encoding;
+    }
+
+    if (isString(data)) {
+      data = stringToBuffer(data);
     }
 
     if (encodings == null) {
@@ -215,25 +249,34 @@ var Encoding = {
    * If `from` is "AUTO", or the encoding-list as an array, or
    *   comma separated list string it will be detected automatically.
    *
-   * @param {Array.<number>|TypedArray} data The data being converted.
+   * @param {Array.<number>|TypedArray|string} data The data being converted.
    * @param {(string|Object)} to The name of encoding to.
    * @param {(string|Array.<string>)=} [from] The encoding-list of
    *   character encoding.
-   * @return {Array} The converted array.
+   * @return {Array|TypedArray|string} The converted data.
    *
    * @public
    * @function
    */
   convert: function(data, to, from) {
-    if (data == null || data.length === 0 || data[0] === void 0) {
-      return data;
-    }
-
+    var result;
+    var type;
     var options = {};
+
     if (isObject(to)) {
       options = to;
       from = options.from;
       to = options.to;
+      if (options.type) {
+        type = options.type;
+      }
+    }
+
+    if (isString(data)) {
+      type = type || 'string';
+      data = stringToBuffer(data);
+    } else if (data == null || data.length === 0) {
+      data = [];
     }
 
     var encodingFrom;
@@ -246,12 +289,24 @@ var Encoding = {
 
     var encodingTo = assignEncodingName(to);
     var method = encodingFrom + 'To' + encodingTo;
+
     if (hasOwnProperty.call(EncodingConvert, method)) {
-      return EncodingConvert[method](data, options);
+      result = EncodingConvert[method](data, options);
+    } else {
+      // Returns the raw data if the method is undefined.
+      result = data;
     }
 
-    // Returns the raw data if the method is undefined.
-    return data;
+    switch (('' + type).toLowerCase()) {
+      case 'string':
+        return codeToString_fast(result);
+      case 'arraybuffer':
+        return codeToBuffer(result);
+      case 'array':
+        /* falls through */
+      default:
+        return bufferToCode(result);
+    }
   },
   /**
    * Encode a character code array to URL string like encodeURIComponent.
@@ -273,7 +328,7 @@ var Encoding = {
 
       //FIXME: JavaScript UTF-16 encoding
       if (b > 0xFF) {
-        return encodeURIComponent(Encoding.codeToString(data));
+        return encodeURIComponent(codeToString_fast(data));
       }
 
       if ((b >= 0x61 /*a*/ && b <= 0x7A /*z*/) ||
@@ -329,22 +384,7 @@ var Encoding = {
    * @public
    * @function
    */
-  codeToString: function(data) {
-    try {
-      return fromCharCode.apply(null, data);
-    } catch (e) {
-      // Ignore RangeError: arguments too large
-    }
-
-    var string = '';
-    var len = data && data.length;
-
-    for (var i = 0; i < len; i++) {
-      string += fromCharCode(data[i]);
-    }
-
-    return string;
-  },
+  codeToString: codeToString_fast,
   /**
    * Splits string to an array of character codes.
    *
@@ -354,15 +394,357 @@ var Encoding = {
    * @public
    * @function
    */
-  stringToCode: function(string) {
-    var code = [];
-    var len = string && string.length;
-
-    for (var i = 0; i < len; i++) {
-      code[i] = string.charCodeAt(i);
+  stringToCode: stringToCode,
+  /**
+   * 全角英数記号文字を半角英数記号文字に変換
+   *
+   * Convert the ascii symbols and alphanumeric characters to
+   *   the zenkaku symbols and alphanumeric characters.
+   *
+   * @example
+   *   console.log(Encoding.toHankakuCase('Ｈｅｌｌｏ Ｗｏｒｌｄ！ １２３４５'));
+   *   // 'Hello World! 12345'
+   *
+   * @param {Array.<number>|TypedArray|string} data The input unicode data.
+   * @return {Array.<number>|string} The conveted data.
+   *
+   * @public
+   * @function
+   */
+  toHankakuCase: function(data) {
+    var asString = false;
+    if (isString(data)) {
+      asString = true;
+      data = stringToBuffer(data);
     }
 
-    return code;
+    var results = [];
+    var len = data && data.length;
+    var i = 0;
+    var c;
+
+    while (i < len) {
+      c = data[i++];
+      if (c >= 0xFF01 && c <= 0xFF5E) {
+        c -= 0xFEE0;
+      }
+      results[results.length] = c;
+    }
+
+    return asString ? codeToString_fast(results) : results;
+  },
+  /**
+   * 半角英数記号文字を全角英数記号文字に変換
+   *
+   * Convert to the zenkaku symbols and alphanumeric characters
+   *  from the ascii symbols and alphanumeric characters.
+   *
+   * @example
+   *   console.log(Encoding.toZenkakuCase('Hello World! 12345'));
+   *   // 'Ｈｅｌｌｏ Ｗｏｒｌｄ！ １２３４５'
+   *
+   * @param {Array.<number>|TypedArray|string} data The input unicode data.
+   * @return {Array.<number>|string} The conveted data.
+   *
+   * @public
+   * @function
+   */
+  toZenkakuCase: function(data) {
+    var asString = false;
+    if (isString(data)) {
+      asString = true;
+      data = stringToBuffer(data);
+    }
+
+    var results = [];
+    var len = data && data.length;
+    var i = 0;
+    var c;
+
+    while (i < len) {
+      c = data[i++];
+      if (c >= 0x21 && c <= 0x7E) {
+        c += 0xFEE0;
+      }
+      results[results.length] = c;
+    }
+
+    return asString ? codeToString_fast(results) : results;
+  },
+  /**
+   * 全角カタカナを全角ひらがなに変換
+   *
+   * Convert to the zenkaku hiragana from the zenkaku katakana.
+   *
+   * @example
+   *   console.log(Encoding.toHiraganaCase('ボポヴァアィイゥウェエォオ'));
+   *   // 'ぼぽう゛ぁあぃいぅうぇえぉお'
+   *
+   * @param {Array.<number>|TypedArray|string} data The input unicode data.
+   * @return {Array.<number>|string} The conveted data.
+   *
+   * @public
+   * @function
+   */
+  toHiraganaCase: function(data) {
+    var asString = false;
+    if (isString(data)) {
+      asString = true;
+      data = stringToBuffer(data);
+    }
+
+    var results = [];
+    var len = data && data.length;
+    var i = 0;
+    var c;
+
+    while (i < len) {
+      c = data[i++];
+      if (c >= 0x30A1 && c <= 0x30F6) {
+        c -= 0x0060;
+      // 「ワ゛」 => 「わ」 + 「゛」
+      } else if (c === 0x30F7) {
+        results[results.length] = 0x308F;
+        c = 0x309B;
+      // 「ヲ゛」 => 「を」 + 「゛」
+      } else if (c === 0x30FA) {
+        results[results.length] = 0x3092;
+        c = 0x309B;
+      }
+      results[results.length] = c;
+    }
+
+    return asString ? codeToString_fast(results) : results;
+  },
+  /**
+   * 全角ひらがなを全角カタカナに変換
+   *
+   * Convert to the zenkaku katakana from the zenkaku hiragana.
+   *
+   * @example
+   *   console.log(Encoding.toKatakanaCase('ぼぽう゛ぁあぃいぅうぇえぉお'));
+   *   // 'ボポヴァアィイゥウェエォオ'
+   *
+   * @param {Array.<number>|TypedArray|string} data The input unicode data.
+   * @return {Array.<number>|string} The conveted data.
+   *
+   * @public
+   * @function
+   */
+  toKatakanaCase: function(data) {
+    var asString = false;
+    if (isString(data)) {
+      asString = true;
+      data = stringToBuffer(data);
+    }
+
+    var results = [];
+    var len = data && data.length;
+    var i = 0;
+    var c;
+
+    while (i < len) {
+      c = data[i++];
+      if (c >= 0x3041 && c <= 0x3096) {
+        if ((c === 0x308F || // 「わ」 + 「゛」 => 「ワ゛」
+             c === 0x3092) && // 「を」 + 「゛」 => 「ヲ゛」
+            i < len && data[i] === 0x309B) {
+          c = c === 0x308F ? 0x30F7 : 0x30FA;
+          i++;
+        } else {
+          c += 0x0060;
+        }
+      }
+      results[results.length] = c;
+    }
+
+    return asString ? codeToString_fast(results) : results;
+  },
+  /**
+   * 全角カタカナを半角ｶﾀｶﾅに変換
+   *
+   * Convert to the hankaku katakana from the zenkaku katakana.
+   *
+   * @example
+   *   console.log(Encoding.toHankanaCase('ボポヴァアィイゥウェエォオ'));
+   *   // 'ﾎﾞﾎﾟｳﾞｧｱｨｲｩｳｪｴｫｵ'
+   *
+   * @param {Array.<number>|TypedArray|string} data The input unicode data.
+   * @return {Array.<number>|string} The conveted data.
+   *
+   * @public
+   * @function
+   */
+  toHankanaCase: function(data) {
+    var asString = false;
+    if (isString(data)) {
+      asString = true;
+      data = stringToBuffer(data);
+    }
+
+    var results = [];
+    var len = data && data.length;
+    var i = 0;
+    var c, d, t;
+
+    while (i < len) {
+      c = data[i++];
+
+      if (c >= 0x3001 && c <= 0x30FC) {
+        t = hankanaCase_table[c];
+        if (t !== void 0) {
+          results[results.length] = t;
+          continue;
+        }
+      }
+
+      // 「ヴ」, 「ワ」+「゛」, 「ヲ」+「゛」
+      if (c === 0x30F4 || c === 0x30F7 || c === 0x30FA) {
+        results[results.length] = hankanaCase_sonants[c];
+        results[results.length] = 0xFF9E;
+        // 「カ」 - 「ド」
+      } else if (c >= 0x30AB && c <= 0x30C9) {
+        results[results.length] = hankanaCase_table[c - 1];
+        results[results.length] = 0xFF9E;
+        // 「ハ」 - 「ポ」
+      } else if (c >= 0x30CF && c <= 0x30DD) {
+        d = c % 3;
+        results[results.length] = hankanaCase_table[c - d];
+        results[results.length] = hankanaCase_marks[d - 1];
+      } else {
+        results[results.length] = c;
+      }
+    }
+
+    return asString ? codeToString_fast(results) : results;
+  },
+  /**
+   * 半角ｶﾀｶﾅを全角カタカナに変換 (濁音含む)
+   *
+   * Convert to the zenkaku katakana from the hankaku katakana.
+   *
+   * @example
+   *   console.log(Encoding.toZenkanaCase('ﾎﾞﾎﾟｳﾞｧｱｨｲｩｳｪｴｫｵ'));
+   *   // 'ボポヴァアィイゥウェエォオ'
+   *
+   * @param {Array.<number>|TypedArray|string} data The input unicode data.
+   * @return {Array.<number>|string} The conveted data.
+   *
+   * @public
+   * @function
+   */
+  toZenkanaCase: function(data) {
+    var asString = false;
+    if (isString(data)) {
+      asString = true;
+      data = stringToBuffer(data);
+    }
+
+    var results = [];
+    var len = data && data.length;
+    var i = 0;
+    var c, code, next;
+
+    for (i = 0; i < len; i++) {
+      c = data[i];
+      // Hankaku katakana
+      if (c > 0xFF60 && c < 0xFFA0) {
+        code = zenkanaCase_table[c - 0xFF61];
+        if (i + 1 < len) {
+          next = data[i + 1];
+          // 「ﾞ」 + 「ヴ」
+          if (next === 0xFF9E && c === 0xFF73) {
+            code = 0x30F4;
+            i++;
+          // 「ﾞ」 + 「ワ゛」
+          } else if (next === 0xFF9E && c === 0xFF9C) {
+            code = 0x30F7;
+            i++;
+          // 「ﾞ」 + 「ｦ゛」
+          } else if (next === 0xFF9E && c === 0xFF66) {
+            code = 0x30FA;
+            i++;
+            // 「ﾞ」 + 「カ」 - 「コ」 or 「ハ」 - 「ホ」
+          } else if (next === 0xFF9E &&
+                     ((c > 0xFF75 && c < 0xFF85) ||
+                      (c > 0xFF89 && c < 0xFF8F))) {
+            code++;
+            i++;
+            // 「ﾟ」 + 「ハ」 - 「ホ」
+          } else if (next === 0xFF9F &&
+                     (c > 0xFF89 && c < 0xFF8F)) {
+            code += 2;
+            i++;
+          }
+        }
+        c = code;
+      }
+      results[results.length] = c;
+    }
+
+    return asString ? codeToString_fast(results) : results;
+  },
+  /**
+   * 全角スペースを半角スペースに変換
+   *
+   * Convert the em space(U+3000) to the single space(U+0020).
+   *
+   * @param {Array.<number>|TypedArray|string} data The input unicode data.
+   * @return {Array.<number>|string} The conveted data.
+   *
+   * @public
+   * @function
+   */
+  toHankakuSpace: function(data) {
+    if (isString(data)) {
+      return data.replace(/\u3000/g, ' ');
+    }
+
+    var results = [];
+    var len = data && data.length;
+    var i = 0;
+    var c;
+
+    while (i < len) {
+      c = data[i++];
+      if (c === 0x3000) {
+        c = 0x20;
+      }
+      results[results.length] = c;
+    }
+
+    return results;
+  },
+  /**
+   * 半角スペースを全角スペースに変換
+   *
+   * Convert the single space(U+0020) to the em space(U+3000).
+   *
+   * @param {Array.<number>|TypedArray|string} data The input unicode data.
+   * @return {Array.<number>|string} The conveted data.
+   *
+   * @public
+   * @function
+   */
+  toZenkakuSpace: function(data) {
+    if (isString(data)) {
+      return data.replace(/\u0020/g, '\u3000');
+    }
+
+    var results = [];
+    var len = data && data.length;
+    var i = 0;
+    var c;
+
+    while (i < len) {
+      c = data[i++];
+      if (c === 0x20) {
+        c = 0x3000;
+      }
+      results[results.length] = c;
+    }
+
+    return results;
   }
 };
 
@@ -793,7 +1175,7 @@ function isUTF16BE(data) {
   var i = 0;
   var len = data && data.length;
   var pos = null;
-  var b1, b2, b;
+  var b1, b2;
 
   if (len < 2) {
     if (data[0] > 0xFF) {
@@ -839,7 +1221,7 @@ function isUTF16LE(data) {
   var i = 0;
   var len = data && data.length;
   var pos = null;
-  var b1, b2, b;
+  var b1, b2;
 
   if (len < 2) {
     if (data[0] > 0xFF) {
@@ -1217,7 +1599,7 @@ function EUCJPToJIS(data) {
   var index = 0;
   var len = data && data.length;
   var i = 0;
-  var b1, b2;
+  var b;
 
   // escape sequence
   var esc = [
@@ -1227,8 +1609,8 @@ function EUCJPToJIS(data) {
   ];
 
   for (; i < len; i++) {
-    b1 = data[i];
-    if (b1 === 0x8E) {
+    b = data[i];
+    if (b === 0x8E) {
       if (index !== 2) {
         index = 2;
         results[results.length] = esc[6];
@@ -1236,14 +1618,14 @@ function EUCJPToJIS(data) {
         results[results.length] = esc[8];
       }
       results[results.length] = data[++i] - 0x80 & 0xFF;
-    } else if (b1 > 0x8E) {
+    } else if (b > 0x8E) {
       if (index !== 1) {
         index = 1;
         results[results.length] = esc[3];
         results[results.length] = esc[4];
         results[results.length] = esc[5];
       }
-      results[results.length] = b1 - 0x80 & 0xFF;
+      results[results.length] = b - 0x80 & 0xFF;
       results[results.length] = data[++i] - 0x80 & 0xFF;
     } else {
       if (index !== 0) {
@@ -1252,7 +1634,7 @@ function EUCJPToJIS(data) {
         results[results.length] = esc[1];
         results[results.length] = esc[2];
       }
-      results[results.length] = b1 & 0xFF;
+      results[results.length] = b & 0xFF;
     }
   }
 
@@ -1856,7 +2238,7 @@ function UNICODEToUTF16BE(data) {
   var results = [];
   var i = 0;
   var len = data && data.length;
-  var c, c2;
+  var c;
 
   while (i < len) {
     c = data[i++];
@@ -1885,7 +2267,7 @@ function UNICODEToUTF16LE(data) {
   var results = [];
   var i = 0;
   var len = data && data.length;
-  var c, c2;
+  var c;
 
   while (i < len) {
     c = data[i++];
@@ -2639,6 +3021,145 @@ function getKeys(object) {
   }
 
   return keys;
+}
+
+
+function createBuffer(bits, size) {
+  if (!HAS_TYPED) {
+    return new Array(size);
+  }
+
+  switch (bits) {
+    case 8: return new Uint8Array(size);
+    case 16: return new Uint16Array(size);
+  }
+}
+
+
+function stringToBuffer(string) {
+  var length = string.length;
+  var buffer = createBuffer(16, length);
+
+  for (var i = 0; i < length; i++) {
+    buffer[i] = string.charCodeAt(i);
+  }
+
+  return buffer;
+}
+
+
+function codeToString_fast(code) {
+  if (CAN_CHARCODE_APPLY && CAN_CHARCODE_APPLY_TYPED) {
+    var len = code && code.length;
+    if (len < APPLY_BUFFER_SIZE) {
+      if (APPLY_BUFFER_SIZE_OK) {
+        return fromCharCode.apply(null, code);
+      }
+
+      if (APPLY_BUFFER_SIZE_OK === null) {
+        try {
+          var s = fromCharCode.apply(null, code);
+          APPLY_BUFFER_SIZE_OK = true;
+          return s;
+        } catch (e) {
+          // Ignore RangeError: arguments too large
+          APPLY_BUFFER_SIZE_OK = false;
+        }
+      }
+    }
+  }
+
+  return codeToString_chunked(code);
+}
+
+
+function codeToString_chunked(code) {
+  var string = '';
+  var length = code && code.length;
+  var i = 0;
+  var sub;
+
+  while (i < length) {
+    if (code.subarray) {
+      sub = code.subarray(i, i + APPLY_BUFFER_SIZE);
+    } else {
+      sub = code.slice(i, i + APPLY_BUFFER_SIZE);
+    }
+    i += APPLY_BUFFER_SIZE;
+
+    if (APPLY_BUFFER_SIZE_OK) {
+      string += fromCharCode.apply(null, sub);
+      continue;
+    }
+
+    if (APPLY_BUFFER_SIZE_OK === null) {
+      try {
+        string += fromCharCode.apply(null, sub);
+        APPLY_BUFFER_SIZE_OK = true;
+        continue;
+      } catch (e) {
+        APPLY_BUFFER_SIZE_OK = false;
+      }
+    }
+
+    return codeToString_slow(code);
+  }
+
+  return string;
+}
+
+
+function codeToString_slow(code) {
+  var string = '';
+  var length = code && code.length;
+
+  for (var i = 0; i < length; i++) {
+    string += fromCharCode(code[i]);
+  }
+
+  return string;
+}
+
+
+function stringToCode(string) {
+  var code = [];
+  var len = string && string.length;
+
+  for (var i = 0; i < len; i++) {
+    code[i] = string.charCodeAt(i);
+  }
+
+  return code;
+}
+
+
+function codeToBuffer(code) {
+  if (HAS_TYPED) {
+    // Use Uint16Array for Unicode codepoint.
+    return new Uint16Array(code);
+  } else {
+    if (isArray(code)) {
+      return code;
+    }
+  }
+
+  var length = code && code.length;
+  var buffer = [];
+
+  for (var i = 0; i < length; i++) {
+    buffer[i] = code[i];
+  }
+
+  return buffer;
+}
+
+
+function bufferToCode(buffer) {
+  if (isArray(buffer)) {
+    return buffer;
+  }
+
+  return slice.call(buffer);
 }
 
 
@@ -4082,6 +4603,59 @@ function init_JIS_TO_UTF8_TABLE() {
     }
   }
 }
+
+/**
+ * Katakana table
+ *
+ * @ignore
+ */
+var hankanaCase_table = {
+  0x3001:0xFF64,0x3002:0xFF61,0x300C:0xFF62,0x300D:0xFF63,0x309B:0xFF9E,
+  0x309C:0xFF9F,0x30A1:0xFF67,0x30A2:0xFF71,0x30A3:0xFF68,0x30A4:0xFF72,
+  0x30A5:0xFF69,0x30A6:0xFF73,0x30A7:0xFF6A,0x30A8:0xFF74,0x30A9:0xFF6B,
+  0x30AA:0xFF75,0x30AB:0xFF76,0x30AD:0xFF77,0x30AF:0xFF78,0x30B1:0xFF79,
+  0x30B3:0xFF7A,0x30B5:0xFF7B,0x30B7:0xFF7C,0x30B9:0xFF7D,0x30BB:0xFF7E,
+  0x30BD:0xFF7F,0x30BF:0xFF80,0x30C1:0xFF81,0x30C3:0xFF6F,0x30C4:0xFF82,
+  0x30C6:0xFF83,0x30C8:0xFF84,0x30CA:0xFF85,0x30CB:0xFF86,0x30CC:0xFF87,
+  0x30CD:0xFF88,0x30CE:0xFF89,0x30CF:0xFF8A,0x30D2:0xFF8B,0x30D5:0xFF8C,
+  0x30D8:0xFF8D,0x30DB:0xFF8E,0x30DE:0xFF8F,0x30DF:0xFF90,0x30E0:0xFF91,
+  0x30E1:0xFF92,0x30E2:0xFF93,0x30E3:0xFF6C,0x30E4:0xFF94,0x30E5:0xFF6D,
+  0x30E6:0xFF95,0x30E7:0xFF6E,0x30E8:0xFF96,0x30E9:0xFF97,0x30EA:0xFF98,
+  0x30EB:0xFF99,0x30EC:0xFF9A,0x30ED:0xFF9B,0x30EF:0xFF9C,0x30F2:0xFF66,
+  0x30F3:0xFF9D,0x30FB:0xFF65,0x30FC:0xFF70
+};
+
+/**
+ * @ignore
+ */
+var hankanaCase_sonants = {
+  0x30F4:0xFF73,
+  0x30F7:0xFF9C,
+  0x30FA:0xFF66
+};
+
+/**
+ * Sonant marks.
+ *
+ * @ignore
+ */
+var hankanaCase_marks = [0xFF9E, 0xFF9F];
+
+/**
+ * Zenkaku table [U+FF61] - [U+FF9F]
+ *
+ * @ignore
+ */
+var zenkanaCase_table = [
+  0x3002, 0x300C, 0x300D, 0x3001, 0x30FB, 0x30F2, 0x30A1, 0x30A3,
+  0x30A5, 0x30A7, 0x30A9, 0x30E3, 0x30E5, 0x30E7, 0x30C3, 0x30FC,
+  0x30A2, 0x30A4, 0x30A6, 0x30A8, 0x30AA, 0x30AB, 0x30AD, 0x30AF,
+  0x30B1, 0x30B3, 0x30B5, 0x30B7, 0x30B9, 0x30BB, 0x30BD, 0x30BF,
+  0x30C1, 0x30C4, 0x30C6, 0x30C8, 0x30CA, 0x30CB, 0x30CC, 0x30CD,
+  0x30CE, 0x30CF, 0x30D2, 0x30D5, 0x30D8, 0x30DB, 0x30DE, 0x30DF,
+  0x30E0, 0x30E1, 0x30E2, 0x30E4, 0x30E6, 0x30E8, 0x30E9, 0x30EA,
+  0x30EB, 0x30EC, 0x30ED, 0x30EF, 0x30F3, 0x309B, 0x309C
+];
 
 return Encoding;
 });
