@@ -3,33 +3,18 @@
 <head>
 <meta charset="UTF-8">
 <title>Unzip and Drop file in JavaScript</title>
-<link rel="shourtcut icon" href="http://api.polygonpla.net/img/icon/house.png">
-<script type="text/javascript" async="async" src="http://ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
-<script type="text/javascript" async="async" src="http://api.polygonpla.net/js/pot/1.18/pot.min.js"></script>
-<script type="text/javascript" async="async" src="https://github.com/polygonplanet/Unzipper.js/raw/master/src/inflate.js"></script>
-<script type="text/javascript" async="async" src="https://github.com/polygonplanet/Unzipper.js/raw/master/src/unzipper.js"></script>
-<script type="text/javascript" async="async" src="https://github.com/polygonplanet/Unzipper.js/raw/master/src/encoding.js"></script>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+<script src="js/pot.min.js"></script>
+<script src="js/inflate.js"></script>
+<script src="js/unzipper.js"></script>
+<script src="js/encoding.js"></script>
 <script>
-setTimeout(function() {
-  var done;
+$(function() {
+  run();
 
-  void function loadback() {
-    if (typeof $ === 'undefined' ||
-        typeof Pot === 'undefined' ||
-        typeof Unzipper === 'undefined' ||
-        typeof Encoding === 'undefined' ||
-        typeof zip_inflate === 'undefined') {
-      setTimeout(loadback, 32);
-
-    } else if (!done) {
-      done = true;
-      doit();
-    }
-  }();
-
-
-  function valid(name, force) {
-    if (force || Pot.lower(Pot.getExt(name)) !== 'zip') {
+  function valid(name) {
+    console.log(name);
+    if (!/\.zip$/i.test(name)) {
       var warn = $('<div/>')
         .css({color : 'red'})
         .text('This is not zip file.')
@@ -47,8 +32,9 @@ setTimeout(function() {
   }
 
 
-  function doit() {
+  function run() {
     var container = $('#container');
+    var processing = $('#processing');
 
     return Pot.Deferred.begin(function() {
       var panel = $('#drop')
@@ -56,13 +42,6 @@ setTimeout(function() {
         .appendTo('body');
 
       $('#drop-wrap').remove();
-
-      var loading = $('<div/>')
-        .css({
-          margin     : '0.5em',
-          fontWeight : 'bold'
-        })
-        .text('loading...');
 
       var dropFile = new Pot.DropFile(panel, {
         onShow : function() {
@@ -72,10 +51,10 @@ setTimeout(function() {
           panel.hide();
         },
         onLoadImage : function(data, name, size, type) {
-          valid(name, true);
+          valid(name);
         },
         onLoadText : function(data, name, size, type) {
-          valid(name, true);
+          valid(name);
         },
         onLoadUnknown : function(data, name, size, type) {
           if (!valid(name)) {
@@ -90,11 +69,9 @@ setTimeout(function() {
             )
             .appendTo(container);
 
-          loading.appendTo(container);
-
+          processing.text('processing...');
           var unzipper = new Unzipper();
-
-          unzipper.convertEncodingToUTF8 = true;
+          unzipper.isConvertEncodingToUTF8 = true;
           unzipper.unzip(data, size, function(res) {
             if (res) {
               $('<p/>')
@@ -118,7 +95,7 @@ setTimeout(function() {
               .appendTo(container);
 
           }).ensure(function(res) {
-            loading.remove();
+            processing.text('');
 
             $('<h2/>')
               .css({color : 'blue'})
@@ -135,8 +112,7 @@ setTimeout(function() {
       });
     });
   }
-
-}, 200);
+});
 </script>
 <style>
 #drop-wrap {
@@ -176,6 +152,10 @@ textarea {
   margin: 1em;
 }
 
+#processing {
+  font-weight: bold;
+}
+
 #footer {
   margin: 0.5em auto;
   text-align: center;
@@ -183,14 +163,15 @@ textarea {
 </style>
 </head>
 <body>
-<h1>Unzip and Drop file in JavaScript</h1>
-<h2>Inflate with asynchronous.</h2>
+<h1>JavaScriptでzipファイルを展開します</h1>
 <p>
  適当な zip ファイルをデスクトップなどからドロップすると解凍したデータが表示されます。
  <br>
  非同期で処理しているので、たぶん重いファイルでも負荷を抑えて解凍できます (その場合メモリに注意)。
  <br>
  文字コードは UTF-8 に合わせて変換して表示します。
+ <br>
+ ※このページ内のみで表示するためデータは外部サーバーなどに送られません。
 </p>
 <p>
  HTML5 File API, ArrayBuffer, DropEvent がサポートされてるブラウザのみ動きます (Firefox, GoogleChrome etc.)
@@ -205,11 +186,11 @@ textarea {
 </div>
 
 <div id="container"></div>
+<div id="processing"></div>
 
 <p id="footer">
- Last modified: 2012-04-24
- Written by <a href="http://twitter.com/polygon_planet" title="Twitter @polygon_planet" target="_blank">polygon planet</a>
- <a href="https://github.com/polygonplanet/Unzipper.js" title="polygonplanet/Unzipper.js - GitHub">GitHub</a>
+  <a href="https://github.com/polygonplanet/Unzipper.js">Repository in GitHub</a>
+  <a href="https://github.com/polygonplanet/Unzipper.js"><img style="position: absolute; top: 0; right: 0; border: 0;" src="https://s3.amazonaws.com/github/ribbons/forkme_right_green_007200.png" alt="Fork me on GitHub"></a>
 </p>
 </body>
 </html>
